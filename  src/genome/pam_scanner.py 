@@ -1,0 +1,98 @@
+"""PAM site detection for various Cas variants."""
+
+import re
+from typing import List, Dict, Tuple
+from dataclasses import dataclass
+
+@dataclass
+class PAMSite:
+    position: int
+    sequence: str
+    strand: str  # '+' or '-'
+    variant: str
+
+class PAMScanner:
+    """Scan DNA sequences for PAM sites."""
+    
+    PAM_LIBRARY: Dict[str, List[str]] = {
+        'SpCas9': ['NGG'],
+        'SpCas9-NG': ['NG'],
+        'xCas9': ['NG', 'GAA', 'GAT'],
+        'SpRY': ['NRN', 'NYN'],
+        'Sniper-Cas9': ['NGG'],
+    }
+    
+    @classmethod
+    def find(cls, sequence: str, variant: str = 'SpCas9') -> List[PAMSite]:
+        """
+        Find all PAM sites for given variant.
+        
+        Args:
+            sequence: Target DNA sequence
+            variant: Cas variant name
+            
+        Returns:
+            List of PAMSite objects
+        """
+        sequence = sequence.upper()
+        pams = cls.PAM_LIBRARY.get(variant, ['NGG'])
+        sites = []
+        
+        for pam in pams:
+            # Convert PAM pattern to regex
+            regex = pam.replace('N', '[ATGC]').replace('R', '[AG]').replace('Y', '[CT]')
+            
+            # Forward strand (+)
+            for match in re.finditer(regex, sequence):
+                sites.append(PAMSite(
+                    position=match.start(),
+                    sequence=match.group(),
+                    strand='+',
+                    variant=variant
+                ))
+            
+            # Reverse strand (-) — PAM on opposite side
+            rc_sequence = cls._reverse_complement(sequence)
+            for match in re.finditer(regex, rc_sequence):
+                # Map position back to original sequence
+                orig_pos = len(sequence) - match.end()
+                sites.append(PAMSite(
+                    position=orig_pos,
+                    sequence=match.group(),
+                    strand='-',
+                    variant=variant
+                ))
+        
+        # Remove duplicates and sort
+        seen = set()
+        unique_sites = []
+        for site in sorted(sites, key=lambda x: x.position):
+            key = (site.position, site.strand)
+            if key not in seen:
+                seen.add(key)
+                unique_sites.append(site)
+        
+        return unique_sites
+    
+    @staticmethod
+    def _reverse_complement(seq: str) -> str:
+        comp = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G'}
+        return "".join(comp.get(b, 'N') for b in reversed(seq))
+    
+    @classmethod
+    def get_target_region(cls, sequence: str, pam_site: PAMSite, 
+                          guide_length: int = 20) -> str:
+        """Extract target region (guide RNA binding site) adjacent to PAM."""
+        if pam_site.strand == '+':
+            # PAM is downstream of target (3' of target)
+            start = max(0, pam_site.position - guide_length)
+            end = pam_site.position
+            return sequence[start:end]
+        else:
+            # PAM is upstream of target on reverse strand
+            start = pam_site.position + len(pam_site.sequence)
+            end = min(len(sequence), start + guide_length)
+            target = sequence[start:end]
+            # Return reverse complement as guide binds to this
+            comp = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G'}
+            return "".join(comp.get(b, 'N') for b in reversed(target))
