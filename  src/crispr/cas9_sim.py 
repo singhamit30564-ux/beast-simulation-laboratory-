@@ -1,0 +1,148 @@
+"""CRISPR-Cas9 double-strand break simulator."""
+
+import random
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from src.genome.pam_scanner import PAMScanner, PAMSite
+
+@dataclass
+class CutResult:
+    efficiency: float
+    indels: Dict[str, float]
+    off_targets: List[Dict]
+    repair_pathway: str
+    cut_position: int
+
+class Cas9Simulator:
+    """Simulate Cas9 cutting and repair outcomes."""
+    
+    def __init__(self, variant: str = 'SpCas9'):
+        self.variant = variant
+        self.pam_scanner = PAMScanner()
+    
+    def cut(self, target: str, pam: Optional[PAMSite] = None,
+            repair_pathway: str = 'NHEJ', cell_type: str = 'HEK293') -> CutResult:
+        """
+        Simulate Cas9 cut at target site.
+        
+        Args:
+            target: Full target DNA sequence
+            pam: PAM site (if None, scans for first valid PAM)
+            repair_pathway: 'NHEJ' or 'HDR'
+            cell_type: Cell type for efficiency adjustment
+            
+        Returns:
+            CutResult with predicted outcomes
+        """
+        target = target.upper()
+        
+        if pam is None:
+            pams = self.pam_scanner.find(target, self.variant)
+            if not pams:
+                return CutResult(
+                    efficiency=0.0,
+                    indels={},
+                    off_targets=[],
+                    repair_pathway=repair_pathway,
+                    cut_position=-1
+                )
+            pam = pams[0]
+        
+        # Calculate on-target efficiency
+        efficiency = self._calculate_efficiency(target, pam, cell_type)
+        
+        # Predict indels based on repair pathway
+        indels = self._predict_indels(target, pam, repair_pathway)
+        
+        # Scan for off-targets
+        off_targets = self._scan_off_targets(target, pam)
+        
+        # Cut position is 3bp upstream of PAM on target strand
+        if pam.strand == '+':
+            cut_position = pam.position - 3
+        else:
+            cut_position = pam.position + len(pam.sequence) + 3
+        
+        return CutResult(
+            efficiency=efficiency,
+            indels=indels,
+            off_targets=off_targets,
+            repair_pathway=repair_pathway,
+            cut_position=cut_position
+        )
+    
+    def _calculate_efficiency(self, sequence: str, pam: PAMSite, 
+                              cell_type: str) -> float:
+        """Calculate on-target cutting efficiency."""
+        # Base efficiency
+        base_eff = 85.0
+        
+        # GC content adjustment (40-60% is optimal)
+        target_region = self.pam_scanner.get_target_region(sequence, pam)
+        gc = (target_region.count('G') + target_region.count('C')) / len(target_region) * 100
+        if 40 <= gc <= 60:
+            base_eff += 10.0
+        elif gc < 30 or gc > 70:
+            base_eff -= 15.0
+        
+        # Cell type adjustment
+        cell_factors = {
+            'HEK293': 1.0,
+            'K562': 0.95,
+            'iPSC': 0.80,
+            'T-cell': 0.75,
+        }
+        base_eff *= cell_factors.get(cell_type, 1.0)
+        
+        # PAM variant adjustment
+        if self.variant == 'Sniper-Cas9':
+            base_eff *= 0.90  # Higher fidelity, slightly lower efficiency
+        
+        return min(99.0, max(0.0, base_eff))
+    
+    def _predict_indels(self, sequence: str, pam: PAMSite,
+                        pathway: str) -> Dict[str, float]:
+        """Predict indel profile after repair."""
+        if pathway == 'NHEJ':
+            # Non-homologous end joining: error-prone
+            return {
+                'no_indel': 20.0,
+                '1bp_deletion': 35.0,
+                '2bp_deletion': 25.0,
+                '3bp_deletion': 10.0,
+                '1bp_insertion': 5.0,
+                'other': 5.0
+            }
+        elif pathway == 'HDR':
+            # Homology-directed repair: precise
+            return {
+                'precise_repair': 70.0,
+                'no_repair': 15.0,
+                'erroneous_repair': 10.0,
+                'other': 5.0
+            }
+        else:
+            return {'unknown': 100.0}
+    
+    def _scan_off_targets(self, sequence: str, pam: PAMSite,
+                          max_mismatches: int = 3) -> List[Dict]:
+        """
+        Simple off-target scan (in-silico).
+        In production, this would scan whole genome.
+        """
+        # Placeholder: return empty or simulated off-targets
+        # Real implementation would use genome-wide search
+        target = self.pam_scanner.get_target_region(sequence, pam)
+        
+        off_targets = []
+        # Simulate finding 0-2 off-targets
+        if random.random() > 0.7:
+            off_targets.append({
+                'chromosome': 'chr1',
+                'position': random.randint(1000000, 2000000),
+                'mismatches': random.randint(1, 3),
+                'sequence': target[:5] + '...' + target[-5:],
+                'cfd_score': round(random.uniform(0.01, 0.3), 3)
+            })
+        
+        return off_targets
