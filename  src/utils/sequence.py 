@@ -1,0 +1,34 @@
+"""DNA/RNA sequence handling utilities."""
+
+import re
+from typing import List, Tuple
+
+# Standard DNA complement mapping
+COMPLEMENT = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G', 'N': 'N'}
+
+def reverse_complement(seq: str) -> str:
+    """Return reverse complement of DNA sequence."""
+    return "".join(COMPLEMENT.get(base, 'N') for base in reversed(seq.upper()))
+
+def gc_content(seq: str) -> float:
+    """Calculate GC content percentage."""
+    seq = seq.upper()
+    gc = seq.count('G') + seq.count('C')
+    return (gc / len(seq)) * 100 if seq else 0.0
+
+def find_all_occurrences(seq: str, pattern: str) -> List[int]:
+    """Find all start indices of pattern in sequence."""
+    seq = seq.upper()
+    pattern = pattern.upper()
+    indices = []
+    for match in re.finditer(f'(?={pattern})', seq):
+        indices.append(match.start())
+    return indices
+
+def hamming_distance(s1: str, s2: str) -> int:
+    """Calculate Hamming distance between two equal-length sequences."""
+    return sum(c1 != c2 for c1, c2 in zip(s1.upper(), s2.upper()))
+
+def validate_dna(seq: str) -> bool:
+    """Check if sequence contains only valid DNA bases."""
+    return set(seq.upper()).issubset({'A', 'T', 'G', 'C', 'N'})
