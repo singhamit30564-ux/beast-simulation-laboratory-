@@ -1,118 +1,74 @@
-# beast-simulation-laboratory-
-<p align="center">
-  <img src="https://img.shields.io/badge/CRISPR-SIMULATOR-0a0e17?style=for-the-badge&logo=apachespark&logoColor=d4af37" />
-  <img src="https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python" />
-</p>
+# 🧬 BEAST Simulation Laboratory
 
-<h1 align="center">🧬 Beast Simulation Laboratory</h1>
-<h3 align="center">Digital Genome Surgery Simulator</h3>
+An interactive **CRISPR laboratory** built on Streamlit: real sequences, real effector
+parameters, real repair biology — wrapped in simulations you can turn the knobs on.
+
+There is no "run" button that returns a prediction. Every bench is a model with the assumptions
+printed next to it, so the interesting question ("what happens if I change this?") has an answer
+you can see change.
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+streamlit run app.py
+```
 
 ---
 
-## Overview
+## The benches
 
-Beast Simulation Laboratory is a Python-based toolkit for simulating CRISPR-based genome editing experiments. It provides in-silico models for Cas9, Cas13, Base Editors, and Prime Editors with off-target analysis and repair pathway prediction.
+| Bench | What you do |
+| --- | --- |
+| 🛰️ **Mission control** | Orientation: what the app is, which question each bench answers, and the vocabulary you need. |
+| 🦠 **Immunity arena** | Pick a bacterium and an invading phage. Read its CRISPR array (E. coli K-12's array is parsed live out of `data/genomes/ecoli_k12.fasta`), let Cas1–Cas2 write new spacers, then run the phage × bacteria arms race — and mutate the target to see an escape mutant get out of jail. |
+| 🔬 **Cas explorer** | The whole effector toolbox: nucleases (**SpCas9, SaCas9, Nme1/2Cas9, CjCas9, GeoCas9, St1/3Cas9, FnCas9, TdCas9, SpCas9-NG, xCas9-3.7, SpG, SpRY, SpRYc, eSpCas9-1.1, SpCas9-HF1, HypaCas9, evoCas9, Fn/As/LbCas12a, AaCas12b, Un1Cas12f1, Cas12i, CasPhi**), RNA-targeting **Cas13a/b/d**, **10 base editors**, **5 prime editors** — with PAM coverage measured on real sequence. |
+| 🎯 **Guide design** | Scan real IUPAC PAMs, rank guides, look at the off-target table, build the guide RNA, and design an HDR donor or a pegRNA. The on-target score is a transparent heuristic and the UI says so — it is *not* Doench/Azimuth Rule Set 2. |
+| ✂️ **Genome surgery** | The full experiment: target, effector, cell type, delivery, dose, cell-cycle context → allele fates, indel spectrum, sequence-level product, simulated gel, collateral-damage radar. Four modalities: nuclease, HDR, base editing, prime editing. |
+| 🩹 **Repair lab** | Where the outcome is actually decided: c-NHEJ vs MMEJ vs HDR vs SSA, the microhomologies that really exist around your cut, how the indel spectrum changes between cell types, and which HDR levers move the number. |
+| 💊 **Therapeutics** | Five indications, seven clinical programmes (Casgevy, NTLA-2001, VERVE-101, EDIT-101, …), efficiency → endpoint curves, and a patient-cohort projection with between-patient variability. |
+| 🗄️ **Database** | The reference layer: shipped genomes with accessions, twelve bacteria and their CRISPR systems, phages and anti-CRISPR proteins, the searchable effector catalogue, and the provenance file. |
 
-## Features
+## The simulation core (`beastlab/`)
 
-### CRISPR-Cas9 Simulator
-- gRNA design and on-target scoring
-- PAM scanning (SpCas9, SpRY, xCas9, Sniper-Cas9)
-- Double-strand break simulation
-- HDR vs NHEJ repair pathway prediction
-- Indel outcome profiling
+```
+beastlab/
+  sequtils.py       dependency-free sequence toolkit (IUPAC, revcomp, Tm, ORFs, microhomology…)
+  crispr.py         PAM scanning, guide scoring, off-target search, donor & pegRNA design
+  repair.py         DSB repair pathway competition, indel spectra, base/prime editing, safety
+  immunity.py       CRISPR arrays, adaptation, interference, phage × bacteria dynamics
+  theme.py          the visual system (palette, cards, sequence renderers)
+  viz.py            Plotly figures and SVG biology
+  data/             cas_enzymes.py · microbes.py · targets.py · clinical.py
+  pages/            one module per bench (pure Streamlit, no logic hidden in the UI)
+```
 
-### CRISPR-Cas13 Simulator
-- ssRNA targeting and binding simulation
-- Collateral cleavage modeling (SHERLOCK/DETECTR)
-- Transcriptome off-target scanning
-- Cas13a/b/d/x variant support
+Everything is pure Python + numpy/pandas/plotly — no Biopython, no compiled dependencies, so the
+models are readable in place.
 
-### Base Editor Simulator
-- Cytosine Base Editor (CBE): C→T conversion
-- Adenine Base Editor (ABE): A→G conversion
-- Byproduct and indel analysis
-- Editing window prediction
+## Where the data comes from
 
-### Prime Editor Simulator
-- PegRNA design with PBS and RT template
-- All 12 types of point mutations
-- Insertion and deletion simulation
-- PE2/PE3/PEmax variant support
+* **Human loci** — real GRCh38 windows fetched from the Ensembl REST API (HBB sickle allele,
+  BCL11A +58 enhancer, HBG1 HPFH promoter, PCSK9, TTR, CEP290 IVS26, AAVS1, CCR5).
+* **Bacterial and phage genomes** — NCBI RefSeq: *E. coli* K-12 MG1655 U00096.3 (the type I-E
+  CRISPR-1 array plus a coding-dense window) and phiX174 NC_001422.1, fetched with E-utilities.
+* **Repeats, PAMs, editors, anti-CRISPRs, trials** — from the primary literature, FDA labels and
+  trial press releases; every entry carries its reference. The full list, with the exact fetch
+  commands, is in [`data/references.md`](data/references.md).
 
-### Off-Target Analysis
-- Whole genome in-silico scanning
-- CFD (Cutting Frequency Determination) scoring
-- Aggregate off-target risk assessment
-- Genome-wide heatmap visualization
+Type-level sequences (a system's canonical repeat rather than the strain's own array) are labelled
+`type-level` in the data and in the UI. Nothing here pretends to be a strain it is not.
 
-## Repository Structure
+## What this simulator does **not** claim
 
-beast-simulation-laboratory/ ├── src/ │ ├── crispr/ │ │ ├── cas9_sim.py │ │ ├── cas13_sim.py │ │ ├── base_editor.py │ │ └── prime_editor.py │ ├── genome/ │ │ ├── pam_scanner.py │ │ ├── off_target.py │ │ ├── repair_pathway.py │ │ └── variant_library.py │ ├── visual/ │ │ ├── dna_render.py │ │ ├── cut_site.py │ │ └── repair_anim.py │ └── utils/ │ ├── sequence.py │ ├── scoring.py │ └── formatter.py ├── experiments/ │ ├── sickle_cell_cure.py │ ├── beta_thalassemia.py │ ├── muscular_dystrophy.py │ ├── malaria_resistance.py │ ├── gfp_reporter.py │ └── cancer_immunotherapy.py ├── notebooks/ │ ├── crispr_workflow.ipynb │ ├── base_editing_guide.ipynb │ └── prime_editing_advanced.ipynb ├── data/ │ ├── pam_library.json │ ├── repair_templates.json │ └── scoring_matrices/ ├── requirements.txt ├── LICENSE └── README.md
+* The on-target score is a heuristic, not a trained model; it is only useful for *ranking* guides.
+* Indel sizes are drawn from an empirical spectrum, not from a repair biophysics simulation.
+* Off-target search is exact matching with a mismatch budget inside the supplied sequence, not a
+  whole-genome Cas-OFFinder/Bowtie search.
+* The clinical layer maps published biomarker relationships — it is a projection, not a prognosis.
 
-## Installation
+See the "what this simulator does not claim" section of `data/references.md`, and read the
+assumption lists that accompany every model output.
 
-```bash
-git clone https://github.com/YOUR_USERNAME/beast-simulation-laboratory.git
-cd beast-simulation-laboratory
-pip install -r requirements.txt
+## License
 
-## Quick Start
-from src.crispr.cas9_sim import Cas9Simulator
-from src.genome.pam_scanner import PAMScanner
-
-cas9 = Cas9Simulator(variant="SpCas9")
-target_seq = "ATCGATCGATCGATCGNNGRRT"
-pam = PAMScanner.find(target_seq, variant="SpCas9")
-
-result = cas9.cut(
-    target=target_seq,
-    pam=pam,
-    repair_pathway="NHEJ",
-    cell_type="HEK293"
-)
-
-print(f"Cut Efficiency: {result.efficiency}%")
-print(f"Indel Profile: {result.indels}")
-print(f"Off-targets: {len(result.off_targets)}")
-
-## Supported CRISPR Variants
-Variant	PAM	Use Case	
-SpCas9	NGG	Standard editing	
-SpCas9-NG	NG	Relaxed PAM	
-xCas9	NG, GAA, GAT	Broad PAM	
-SpRY	NRN/NYN	Near PAM-less	
-Sniper-Cas9	NGG	High fidelity	
-Cas13a	Protospacer flanking site	RNA editing	
-Cas13b	DR sequence	RNA editing	
-Cas13d	Protospacer	Compact RNA editing	
-
-## Output Formats
-JSON
- 
-CSV
- 
-VCF (Variant Call Format)
- 
-HTML Report
- 
-MP4/GIF Animation
-
-## Contributions 
-Fork the repository
-2. 
-Create a feature branch
-3. 
-Commit your changes
-4. 
-Push to the branch
-5. 
-Open a Pull Request
-
-## License 
-MIT License 
-
-## Acknowledgments
- Jennifer Doudna and Emmanuelle Charpentier for CRISPR-Cas9
- 
-David Liu for Base Editing and Prime Editing
+MIT — see [LICENSE](LICENSE).
