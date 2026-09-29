@@ -2,3 +2,6 @@ streamlit>=1.36
 plotly>=5.20
 numpy>=1.26
 pandas>=2.1
+reportlab>=4.2
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1+cpu

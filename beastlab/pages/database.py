@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 
 import pandas as pd
 import streamlit as st
+from ..presentation import table, chart
 
 from .. import theme, viz
 from ..data.cas_enzymes import (ALL_DNA_EFFECTORS, BASE_EDITORS, EFFECTOR_BY_ID,
@@ -85,7 +86,7 @@ def _genome_tab() -> None:
         for pos, matched in hits[:60]:
             rows.append({"position (1-based)": pos + 1, "matched": matched,
                          "context": seq[max(0, pos - 6):pos + len(matched) + 6]})
-        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True, height=220)
+        table(pd.DataFrame(rows), width="stretch", hide_index=True, height=220)
     else:
         st.info(f"No {motif} motif in this record on either strand.")
 
@@ -107,7 +108,7 @@ def _genome_tab() -> None:
         orf_rows = [{"start": s + 1, "end": e, "length (aa)": (e - s) // 3,
                      "first 40 aa": aa[:40]} for (s, e, aa) in orfs(seq, 60)]
         if orf_rows:
-            st.dataframe(pd.DataFrame(orf_rows).sort_values("length (aa)", ascending=False),
+            table(pd.DataFrame(orf_rows).sort_values("length (aa)", ascending=False),
                          width="stretch", hide_index=True, height=240)
 
     st.download_button("⬇️ Download this record as FASTA",
@@ -163,7 +164,7 @@ def _bacteria_tab() -> None:
 
 def _phages_tab() -> None:
     st.markdown("#### Phages used in the immunity simulations")
-    st.dataframe(pd.DataFrame([{
+    table(pd.DataFrame([{
         "phage": p["name"], "host": p["host"], "family": p["family"],
         "genome": p["genome_type"], "size (bp)": p["genome_size"],
         "GC": f"{100*p['gc']:.0f}%", "genes": p["genes"], "accession": p["accession"],
@@ -171,7 +172,7 @@ def _phages_tab() -> None:
         "anti-CRISPR": ", ".join(p.get("anti_crispr", [])) or "—",
     } for p in PHAGES]), width="stretch", hide_index=True)
     st.markdown("#### Anti-CRISPR proteins")
-    st.dataframe(pd.DataFrame(ANTI_CRISPR), width="stretch", hide_index=True)
+    table(pd.DataFrame(ANTI_CRISPR), width="stretch", hide_index=True)
     st.markdown(theme.callout(
         "Anti-CRISPRs are the reason 'fully immune' is never fully immune: a phage that carries "
         "an Acr gene can shut the defence down before it fires. In the immunity arena this is the "
@@ -212,7 +213,7 @@ def _cas_tab() -> None:
             "ref": e.get("ref", ""),
         })
     df = pd.DataFrame(rows)
-    st.dataframe(df, width="stretch", hide_index=True, height=380)
+    table(df, width="stretch", hide_index=True, height=380)
     st.download_button("⬇️ Download the catalogue (CSV)", df.to_csv(index=False),
                        "cas_catalogue.csv")
 
@@ -239,19 +240,19 @@ def _cas_tab() -> None:
             st.caption("PAM density for this enzyme is charted in the PAM coverage bench.")
 
     st.markdown("#### Point mutations and the editors that can revert them")
-    st.dataframe(pd.DataFrame(POINT_MUTATION_CLASSES), width="stretch", hide_index=True)
+    table(pd.DataFrame(POINT_MUTATION_CLASSES), width="stretch", hide_index=True)
 
 
 def _registry_tab() -> None:
     st.markdown("#### Loci shipped with the app")
-    st.dataframe(pd.DataFrame(summary_table()), width="stretch", hide_index=True)
+    table(pd.DataFrame(summary_table()), width="stretch", hide_index=True)
     st.markdown("#### Clinical programmes")
-    st.dataframe(pd.DataFrame([{
+    table(pd.DataFrame([{
         "product": t["product"], "modality": t["modality"], "indication": t["indication"],
         "phase": t["phase"], "target": t["target"], "ref": t["ref"],
     } for t in TRIALS]), width="stretch", hide_index=True)
     st.markdown("#### Disease models")
-    st.dataframe(pd.DataFrame([{
+    table(pd.DataFrame([{
         "key": k, "disease": v["name"], "programme": v["market"],
         "endpoint": v["endpoint"], "reference": v["ref"],
     } for k, v in DISEASES.items()]), width="stretch", hide_index=True)

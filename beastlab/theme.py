@@ -25,7 +25,6 @@ BASE_COLORS = {"A": "#4aa8ff", "C": "#48d597", "G": "#ffb454", "T": "#ff7a8a", "
 
 CSS = f"""
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
   html, body, [class*="css"] {{ font-family: 'Inter', system-ui, sans-serif; }}
   .stApp {{ background:
       radial-gradient(1100px 600px at 12% -10%, rgba(212,175,55,0.10), transparent 60%),
@@ -99,6 +98,16 @@ CSS = f"""
     font-family: 'JetBrains Mono', monospace;
   }}
   .spacer-block.new {{ border-color: {C['green']}; box-shadow: 0 0 0 1px rgba(72,213,151,0.35); }}
+  @media (max-width: 640px) {{
+    .beast-hero {{ padding: 16px; }}
+    .beast-hero h1 {{ font-size: 1.55rem; }}
+    [data-testid="stHorizontalBlock"] {{ flex-wrap: wrap; }}
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {{
+      width: 100% !important; flex: 1 1 100% !important; min-width: 0 !important;
+    }}
+    .stButton button, .stDownloadButton button {{ min-height: 44px; }}
+    .card, .callout {{ overflow-wrap: anywhere; }}
+  }}
 </style>
 """
 

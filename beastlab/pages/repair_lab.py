@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 
 import pandas as pd
 import streamlit as st
+from ..presentation import table, chart
 
 from .. import theme, viz
 from ..data.targets import all_loci, coding_strand, get_locus
@@ -108,7 +109,7 @@ def render() -> None:
         st.markdown(DECISION_TREE, unsafe_allow_html=True)
         st.markdown("#### Where each pathway is allowed to act")
         phases = ["G1", "S", "G2", "M"]
-        st.dataframe(pd.DataFrame([{
+        table(pd.DataFrame([{
             "pathway": "c-NHEJ", **{p: ("yes" if p != "M" else "limited") for p in phases}},
             {"pathway": "MMEJ", **{p: ("yes" if p in ("S", "G2") else "limited") for p in phases}},
             {"pathway": "HDR", **{p: ("yes" if p in ("S", "G2") else "no") for p in phases}},
@@ -148,7 +149,7 @@ def render() -> None:
         st.markdown(theme.render_sequence(window, start=offset + 1, width=100, highlights=hl),
                     unsafe_allow_html=True)
         if mh["microhomologies"]:
-            st.dataframe(pd.DataFrame([{
+            table(pd.DataFrame([{
                 "repeat": repeat, "length": length,
                 "left position": l + 1, "right position": r + 1,
                 "deleted bp": r - l,
@@ -185,9 +186,9 @@ def render() -> None:
             })
             charts[cell["short"] if "short" in cell else cell["name"].split(" (")[0]] = \
                 [sim["size_histogram"].get(k, 0) for k in range(-10, 6)]
-        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+        table(pd.DataFrame(rows), width="stretch", hide_index=True)
         if charts:
-            st.plotly_chart(viz.fig_dose_response(
+            chart(viz.fig_dose_response(
                 [str(k) for k in range(-10, 6)], charts,
                 title="Indel size profile (counts per 1000 alleles, sizes -10 … +5)",
                 xlabel="indel size (bp)", ylabel="alleles"), width="stretch")
@@ -236,13 +237,13 @@ def render() -> None:
                  "compared with baseline"),
             ]), unsafe_allow_html=True)
 
-        st.plotly_chart(viz.fig_pathway(pathway_with(active, syncing)), width="stretch")
+        chart(viz.fig_pathway(pathway_with(active, syncing)), width="stretch")
 
         ladder = []
         for lv in HDR_LEVERS:
             ladder.append((lv["name"], pathway_with([lv["id"]], syncing)["HDR"]))
         ladder.append(("ALL combined", pathway_with([l["id"] for l in HDR_LEVERS], syncing)["HDR"]))
-        st.plotly_chart(viz.fig_bar([n for n, _ in ladder], [v for _, v in ladder],
+        chart(viz.fig_bar([n for n, _ in ladder], [v for _, v in ladder],
                                     "HDR share with each lever used alone", theme.C["green"],
                                     height=340, ytitle="HDR (% of repair events)"),
                         width="stretch")

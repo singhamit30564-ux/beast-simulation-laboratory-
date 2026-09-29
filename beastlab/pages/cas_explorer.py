@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 
 import pandas as pd
 import streamlit as st
+from ..presentation import table, chart
 
 from .. import theme, viz
 from ..crispr import build_guide_rna, pam_coverage, scan_pams
@@ -90,7 +91,7 @@ def render() -> None:
                 continue
             rows.append(e)
         st.caption(f"{len(rows)} effectors match.")
-        st.dataframe(_effector_table(rows), width="stretch", hide_index=True, height=420)
+        table(_effector_table(rows), width="stretch", hide_index=True, height=420)
 
         st.markdown("### Effector detail")
         chosen = st.selectbox("Effector", [e["id"] for e in ALL],
@@ -135,7 +136,7 @@ def render() -> None:
             # transpose so each column is one effector; mixed dtypes must be cast to
             # text before they reach Arrow (int + str in one column otherwise fails)
             cmp_df = df.set_index("name").T.astype(str)
-            st.dataframe(cmp_df, width="stretch")
+            table(cmp_df, width="stretch")
             st.markdown(theme.callout(
                 "The trade-off triangle: <b>size</b> (delivery), <b>PAM</b> (where you can cut) "
                 "and <b>cut geometry</b> (blunt vs staggered — which decides whether the target "
@@ -163,8 +164,8 @@ def render() -> None:
                 cov = pam_coverage(locus["sequence"], PAM_COVERAGE_SETS[name], window=window)
                 cov["pam"] = name
                 rows.append(cov)
-            st.plotly_chart(viz.fig_pam_coverage(rows), width="stretch")
-            st.dataframe(pd.DataFrame([{
+            chart(viz.fig_pam_coverage(rows), width="stretch")
+            table(pd.DataFrame([{
                 "PAM set": r["pam"], "sites in locus": r["n_pam_sites"],
                 "per kb": round(r["pam_per_kb"], 1),
                 "median gap (bp)": r["median_distance_bp"],
@@ -188,12 +189,12 @@ def render() -> None:
                                           "protospacer": s["protospacer"],
                                           "PAM": s["pam"],
                                           "cut at": s["cut_site_1"]})
-                st.dataframe(pd.DataFrame(site_rows), width="stretch", hide_index=True)
+                table(pd.DataFrame(site_rows), width="stretch", hide_index=True)
 
     # --------------------------------------------------------------- editors
     with tab_editors:
         st.markdown("#### Base editors — chemistry instead of scissors")
-        st.dataframe(pd.DataFrame([{
+        table(pd.DataFrame([{
             "id": b["id"], "family": b["family"], "conversion": b["conversion"],
             "Cas domain": b["cas"], "PAM": b["pam"],
             "window (protospacer positions)": f"{b['window'][0]}–{b['window'][1]}",
@@ -208,13 +209,13 @@ def render() -> None:
             "info"), unsafe_allow_html=True)
 
         st.markdown("#### Prime editors — search and replace")
-        st.dataframe(pd.DataFrame([{
+        table(pd.DataFrame([{
             "id": p["id"], "cas/RT": p["cas"], "PAM": p["pam"],
             "max efficiency": f"{100*p['max_efficiency']:.0f}%",
             "indel rate": f"{100*p['indel_rate']:.1f}%", "notes": p["notes"],
         } for p in PRIME_EDITORS]), width="stretch", hide_index=True)
         st.markdown("#### The 12 point mutations — and which editor can make them")
-        st.dataframe(pd.DataFrame(POINT_MUTATION_CLASSES), width="stretch", hide_index=True)
+        table(pd.DataFrame(POINT_MUTATION_CLASSES), width="stretch", hide_index=True)
 
     # ---------------------------------------------------------- class tree
     with tab_class:
@@ -224,7 +225,7 @@ def render() -> None:
             "Type V (Cas12)": sum(1 for e in NUCLEASES if e["system"].startswith("V")),
             "Type VI (Cas13)": len(RNA_EFFECTORS),
         }
-        st.plotly_chart(viz.fig_bar(list(counts), list(counts.values()),
+        chart(viz.fig_bar(list(counts), list(counts.values()),
                                     "Effectors in this database by type",
                                     theme.C["gold"], 300), width="stretch")
         st.caption("Class 1 systems (I, III, IV) are multi-protein machines that we do not "

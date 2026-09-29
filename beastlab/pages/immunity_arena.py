@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Tuple
 
 import pandas as pd
 import streamlit as st
+from ..presentation import table, chart
 
 from .. import theme, viz
 from ..data.microbes import ANTI_CRISPR, BACTERIA, BACTERIA_BY_ID, PHAGES
@@ -188,8 +189,8 @@ def render() -> None:
                 "targets this invader": "yes" if any(h["interference"] for h in matching)
                                         else ("no PAM" if matching else "no"),
             })
-        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True, height=280)
-        st.plotly_chart(viz.fig_array_map(array), width="stretch")
+        table(pd.DataFrame(rows), width="stretch", hide_index=True, height=280)
+        chart(viz.fig_array_map(array), width="stretch")
         st.markdown(theme.callout(
             "Evolutionary reading: the newest spacers sit next to the leader (5' end) because "
             "Cas1–Cas2 always inserts there. A real array is a chronological record — the "
@@ -214,7 +215,7 @@ def render() -> None:
                                                 new_count=len(new_spacers),
                                                 leader=array.get("leader", "") or ""),
                         unsafe_allow_html=True)
-            st.dataframe(pd.DataFrame([{
+            table(pd.DataFrame([{
                 "event": e["event"], "new spacer": e["spacer"], "PAM": e["pam"],
                 "position in the invader": e["invader_position"], "GC": f"{100*e['gc']:.0f}%",
             } for e in adapt["events"]]), width="stretch", hide_index=True)
@@ -233,7 +234,7 @@ def render() -> None:
     with tabs[2]:
         st.markdown("### Interference — does the array fire?")
         if hits:
-            st.dataframe(pd.DataFrame([{
+            table(pd.DataFrame([{
                 "spacer": f"S{len(spacers)-h['spacer_index']}",
                 "strand": h["strand"],
                 "position": f"{h['start']+1}–{h['end']}",
@@ -267,7 +268,7 @@ def render() -> None:
         st.markdown("#### Poisson infection at a given MOI")
         moi = st.slider("MOI (phage per bacterium)", 0.01, 50.0, 5.0, step=0.01)
         curve = moist_curve(moi, 1.0, efficiency)
-        st.plotly_chart(viz.fig_moi(curve), width="stretch")
+        chart(viz.fig_moi(curve), width="stretch")
         st.markdown(theme.kv({
             "P(sensitive cell infected)": f"{100*curve['p_infected_sensitive']:.1f}%",
             "P(immune cell survives)": f"{100*curve['p_survive_if_immune']:.1f}%",
@@ -327,7 +328,7 @@ def render() -> None:
                     latency_h=float(phage["latency_min"]) / 60.0,
                 )
             res = st.session_state["arena_challenge"]
-            st.plotly_chart(viz.fig_arms_race(res["series"], res["events"]),
+            chart(viz.fig_arms_race(res["series"], res["events"]),
                             width="stretch")
             f = res["final"]
             st.markdown(theme.metrics([
@@ -415,7 +416,7 @@ def render() -> None:
     # --------------------------------------------------------- anti-CRISPR --
     with tabs[5]:
         st.markdown("### Anti-CRISPR proteins — the counter-defence")
-        st.dataframe(pd.DataFrame(ANTI_CRISPR), width="stretch", hide_index=True)
+        table(pd.DataFrame(ANTI_CRISPR), width="stretch", hide_index=True)
         st.markdown(theme.callout(
             "Anti-CRISPRs are why 'fully immune' is never fully immune. They are also a "
             "laboratory tool: an Acr protein can switch a CRISPR system off on demand, and "
