@@ -5,6 +5,7 @@ from typing import Dict, List
 
 import pandas as pd
 import streamlit as st
+from ..presentation import table, chart
 
 from .. import theme, viz
 from ..data.clinical import (DISEASES, TRIALS, editing_to_hbf, ldl_response,
@@ -56,6 +57,8 @@ def _response_curves(disease: str) -> Dict[str, List[float]]:
 
 
 def render() -> None:
+    from ..case_study import render as sickle_case
+    sickle_case()
     st.markdown(theme.hero(
         "💊 Therapeutics",
         "Every programme on this page is a real trial or an approved medicine. Move the editing "
@@ -83,7 +86,7 @@ def render() -> None:
             }), unsafe_allow_html=True)
         with c2:
             curves = _response_curves(disease)
-            st.plotly_chart(viz.fig_dose_response(
+            chart(viz.fig_dose_response(
                 list(range(0, 101, 5)), curves,
                 title=f"{d['name']} — modelled endpoint response",
                 xlabel="editing efficiency (%)", ylabel="value"), width="stretch")
@@ -164,14 +167,14 @@ def render() -> None:
                     ("Non-responders", f"{result['n'] - round(result['response_rate_percent']*result['n']/100)}",
                      "patients below the endpoint threshold"),
                 ]), unsafe_allow_html=True)
-                st.plotly_chart(viz.fig_histogram(df["editing_percent"].tolist(),
+                chart(viz.fig_histogram(df["editing_percent"].tolist(),
                                                   "Distribution of realised editing",
                                                   "editing efficiency (%)"), width="stretch")
-            st.plotly_chart(viz.fig_scatter(
+            chart(viz.fig_scatter(
                 df["editing_percent"].tolist(), df[key].tolist(),
                 f"{OUTCOME_LABEL[disease]} versus realised editing", "editing efficiency (%)",
                 OUTCOME_LABEL[disease], color=theme.C["gold"]), width="stretch")
-            st.dataframe(df.round(2), width="stretch", hide_index=True, height=260)
+            table(df.round(2), width="stretch", hide_index=True, height=260)
             st.markdown(theme.callout(result["model"], "info"), unsafe_allow_html=True)
             st.markdown(theme.callout(result["disclaimer"], "warn"), unsafe_allow_html=True)
 
@@ -181,7 +184,7 @@ def render() -> None:
         modalities = sorted({t["modality"] for t in TRIALS})
         pick = st.multiselect("Filter by modality", modalities, default=[])
         rows = [t for t in TRIALS if not pick or t["modality"] in pick]
-        st.dataframe(pd.DataFrame([{
+        table(pd.DataFrame([{
             "product": t["product"], "sponsor": t["sponsor"], "modality": t["modality"],
             "target": t["target"], "indication": t["indication"], "phase": t["phase"],
             "delivery": t["delivery"],

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 
 import streamlit as st
+from ..presentation import table, chart
 
 from .. import theme, viz
 from ..data.cas_enzymes import (BASE_EDITORS, NUCLEASES, PRIME_EDITORS,

@@ -82,8 +82,8 @@ def scan_pams(seq: str, enzyme: Dict[str, Any]) -> List[Dict[str, Any]]:
 
     # plus strand
     import re
-    for m in re.finditer(regex, s):
-        p_start, p_end = m.start(), m.end()
+    for m in re.finditer(f"(?=({regex}))", s):
+        p_start, p_end = m.start(1), m.end(1)
         if side == "3":
             ps_start, ps_end = p_start - spacer_len, p_start
             if ps_start < 0:
@@ -96,8 +96,8 @@ def scan_pams(seq: str, enzyme: Dict[str, Any]) -> List[Dict[str, Any]]:
 
     # minus strand: the PAM is read on the reverse complement
     rs = revcomp(s)
-    for m in re.finditer(regex, rs):
-        p_start, p_end = m.start(), m.end()
+    for m in re.finditer(f"(?=({regex}))", rs):
+        p_start, p_end = m.start(1), m.end(1)
         if side == "3":
             ps_start, ps_end = p_start - spacer_len, p_start
             if ps_start < 0:
@@ -316,65 +316,35 @@ def find_offtargets(seq: str, guide: str, enzyme: Dict[str, Any],
 
     A site is scored as an off-target when it carries the enzyme's PAM
     (``pam_valid=True``) or, when ``include_pamless`` is set, when it is a
-    PAM-distal-primed near-match that bulges without a canonical PAM.
+    substitution-only near-match without a canonical PAM. Bulges are not modeled.
     """
-    s = clean(seq)
-    g = clean(guide)
-    L = len(g)
-    if L == 0 or len(s) < L:
+    s, g = clean(seq), clean(guide)
+    if not g or len(s) < len(g):
         return []
     seed_len = int(enzyme.get("seed_len", 12))
-    pam = enzyme.get("pam", "")
     side = enzyme.get("pam_side", "3")
-    hits: List[Dict[str, Any]] = []
-    import re
-    regex = pam_regex(pam) if pam else ""
-
-    def evaluate(ps_start: int, strand: str) -> None:
-        for strand_ in (strand,):
-            pass
-        probe = g if strand == "+" else revcomp(g)
-        window = s[ps_start:ps_start + L]
-        if len(window) < L:
-            return
-        mm = mismatch_positions(probe, window)
+    hits = []
+    # Enumerate exact, adjacent PAM sites, then compare guide in its own orientation.
+    sites = scan_pams(s, {**enzyme, "spacer_len": len(g)})
+    if include_pamless:
+        present = {(site["start"], site["strand"]) for site in sites}
+        for strand in ("+", "-"):
+            for start in range(len(s)-len(g)+1):
+                if (start, strand) not in present:
+                    window = s[start:start+len(g)]
+                    sites.append({"start": start, "end": start+len(g), "strand": strand,
+                                  "protospacer": window if strand == "+" else revcomp(window), "pam": ""})
+    for site in sites:
+        window = site["protospacer"]
+        mm = mismatch_positions(g, window)
+        # Existing ranking excludes all exact matches; external scanner reports them.
         if not mm or len(mm) > max_mismatches:
-            return
-        # mismatch positions reported relative to the PAM-distal start of the spacer
-        pam_ok, pam_seq = False, ""
-        if side == "3":
-            pz = s[ps_start + L: ps_start + L + 8]
-            if regex:
-                m = re.search(regex, pz)
-                if m:
-                    pam_ok, pam_seq = True, pz[m.start():m.end()]
-            elif True:
-                pam_ok = True
-        else:
-            pz = s[max(0, ps_start - 8):ps_start]
-            if regex:
-                m = re.search(regex, revcomp(pz))
-                if m:
-                    pam_ok, pam_seq = True, revcomp(pz)[m.start():m.end()]
-            elif True:
-                pam_ok = True
-        if not pam_ok and not include_pamless:
-            return
-        seed_mm = sum(1 for p in mm if p <= seed_len)
-        hits.append({
-            "start": ps_start, "end": ps_start + L, "strand": strand,
-            "sequence": window, "mismatches": len(mm),
-            "mismatch_positions": mm, "seed_mismatches": seed_mm,
-            "pam": pam_seq, "pam_valid": pam_ok,
-            "mismatch_string": "".join("." if a == b else "|" for a, b in zip(probe, window)),
-        })
-
-    for start in range(0, len(s) - L + 1):
-        evaluate(start, "+")
-    rs = revcomp(s)
-    for start in range(0, len(rs) - L + 1):
-        f_start = len(s) - start - L
-        evaluate(f_start, "-")
+            continue
+        seed_mm = sum(p > len(g)-seed_len if side == "3" else p <= seed_len for p in mm)
+        hits.append({"start": site["start"], "end": site["end"], "strand": site["strand"],
+                     "sequence": window, "mismatches": len(mm), "mismatch_positions": mm,
+                     "seed_mismatches": seed_mm, "pam": site["pam"], "pam_valid": bool(site["pam"]),
+                     "mismatch_string": "".join("." if a == b else "|" for a, b in zip(g, window))})
     return sorted(hits, key=lambda h: (h["mismatches"], h["seed_mismatches"], h["start"]))
 
 

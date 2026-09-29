@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 import streamlit as st
+from ..presentation import table, chart
 
 from .. import theme, viz
 from ..crispr import design_guides, design_pegRNA, find_offtargets
@@ -66,6 +67,8 @@ def _gel_lanes(seq_len: int, cut: int, edited_allele_diff: int,
 
 
 def render() -> None:
+    from ..animation import render as cut_animation
+    cut_animation()
     st.markdown(theme.hero(
         "✂️ Genome surgery",
         "Set up the full experiment — target, effector, cell type, delivery, dose — then look at "
@@ -204,11 +207,11 @@ def render() -> None:
 
         c1, c2 = st.columns(2)
         with c1:
-            st.plotly_chart(viz.fig_pathway(pct), width="stretch")
+            chart(viz.fig_pathway(pct), width="stretch")
         with c2:
-            st.plotly_chart(viz.fig_indel_spectrum(result["indels"]["size_histogram"]),
+            chart(viz.fig_indel_spectrum(result["indels"]["size_histogram"]),
                             width="stretch")
-        st.plotly_chart(viz.fig_allele_pie({k: v for k, v in result["counts"].items() if v},
+        chart(viz.fig_allele_pie({k: v for k, v in result["counts"].items() if v},
                                            "Allele fate of the simulated population"),
                         width="stretch")
 
@@ -237,7 +240,7 @@ def render() -> None:
 
         with st.expander("Sequence-specific microhomology deletions (computed from this locus)"):
             if result["mmej_predictions"]:
-                st.dataframe(pd.DataFrame([{
+                table(pd.DataFrame([{
                     "microhomology": p["repeat"], "length": p["repeat_len"],
                     "deleted bp": p["deletion_len"],
                     "deleted sequence": p["deleted_sequence"][:48],
@@ -251,7 +254,7 @@ def render() -> None:
         # gel
         st.markdown("#### Simulated genotyping gel")
         diff = int(modes[0][0]) if modes else 0
-        st.plotly_chart(viz.fig_gel(_gel_lanes(R["amplicon"], max(1, cut % R["amplicon"]),
+        chart(viz.fig_gel(_gel_lanes(R["amplicon"], max(1, cut % R["amplicon"]),
                                                diff, result["hdr_precise_fraction"] > 0.02)),
                         width="stretch")
 
@@ -264,7 +267,7 @@ def render() -> None:
                               hours_expressed=R["delivery"]["duration_h"] * dose)
         c3, c4 = st.columns([1, 1])
         with c3:
-            st.plotly_chart(viz.fig_radar({
+            chart(viz.fig_radar({
                 "off-target indels": min(1.0, safety["off_target_indel_fraction"] * 8),
                 "large deletions": min(1.0, safety["large_deletion_fraction"] * 4),
                 "translocations": min(1.0, safety["translocation_fraction"] * 6),
@@ -297,7 +300,7 @@ def render() -> None:
                        "this site. Move the target window or choose a different editor — this is "
                        "the single most common failure mode in base editing design.")
             return
-        st.dataframe(pd.DataFrame([{
+        table(pd.DataFrame([{
             "position": e["position"], "base": e["base"], "context": e["context"],
             "relative efficiency": e["relative_efficiency"],
             "bystander": "yes" if e["is_bystander"] else "target (best)",
@@ -312,12 +315,12 @@ def render() -> None:
         ]), unsafe_allow_html=True)
         c1, c2 = st.columns(2)
         with c1:
-            st.plotly_chart(viz.fig_bar([str(k) for k in be["per_position_conversion"]],
+            chart(viz.fig_bar([str(k) for k in be["per_position_conversion"]],
                                         list(be["per_position_conversion"].values()),
                                         "Per-position conversion (%)", theme.C["teal"], 320),
                             width="stretch")
         with c2:
-            st.plotly_chart(viz.fig_allele_pie(be["allele_composition"]), width="stretch")
+            chart(viz.fig_allele_pie(be["allele_composition"]), width="stretch")
         st.markdown(theme.callout(be["transversion_risk"], "info"), unsafe_allow_html=True)
 
         best_edit = max(editable, key=lambda e: e["relative_efficiency"])

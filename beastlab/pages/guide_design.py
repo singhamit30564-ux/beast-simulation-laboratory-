@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 
 import pandas as pd
 import streamlit as st
+from ..presentation import table, chart
 
 from .. import theme, viz
 from ..crispr import (build_guide_rna, design_guides, find_offtargets,
@@ -12,6 +13,8 @@ from ..crispr import (build_guide_rna, design_guides, find_offtargets,
 from ..data.cas_enzymes import EFFECTOR_BY_ID, NUCLEASES, PRIME_EDITORS
 from ..data.targets import all_loci, coding_strand, get_locus
 from ..sequtils import clean, gc_content
+from ..io import parse_dna, canonical
+import hashlib
 
 
 def _guide_frame(guides: List[Dict[str, Any]]) -> pd.DataFrame:
@@ -53,9 +56,13 @@ def render() -> None:
             st.caption(f"{locus['locus']} · {locus['strand']} strand gene · "
                        f"{locus['length']:,} bp · {locus['source']}")
         else:
-            pasted = st.text_area("Sequence (ACGT, any length)", height=120,
+            pasted = st.text_area("FASTA/raw DNA (ACGT, max 10,000 bases)", height=120,
                                   placeholder="paste a gene, an amplicon, a plasmid…")
-            sequence = clean(pasted) if pasted else ""
+            try:
+                sequence = parse_dna(pasted) if pasted else ""
+            except ValueError as exc:
+                st.error(str(exc))
+                sequence = ""
             locus = None
     with c2:
         if sequence:
@@ -68,6 +75,8 @@ def render() -> None:
         st.caption("Everything downstream is computed on this exact sequence: PAM positions, "
                    "cut coordinates, off-target hits.")
 
+    from ..priority_ui import guide_tools
+    guide_tools(sequence, locus if locus else {"source": "user FASTA/raw DNA"})
     if not sequence:
         st.info("Choose a locus or paste a sequence to continue.")
         return
@@ -86,17 +95,23 @@ def render() -> None:
     with e3:
         top_n = st.slider("Guides to score deeply", 5, 60, 20, step=5)
 
+    if len(sequence) < int(enzyme["spacer_len"]) + 3:
+        st.info("Sequence is too short for this nuclease and PAM.")
+        return
     region = st.slider("Target window (bp in this sequence)",
                        1, max(2, len(sequence)), (1, len(sequence)))
     region_0 = (region[0] - 1, region[1])
 
+    fingerprint = hashlib.sha256(canonical([sequence, effector_id, region, max_mm, top_n])).hexdigest()
+    if st.session_state.get("guides_key") != fingerprint:
+        st.session_state.pop("guides", None)
     run = st.button("🔍 Design and rank guides", type="primary")
     if run:
         with st.spinner("scanning PAMs and searching the off-target space…"):
-            guides = design_guides(sequence, enzyme, region=region_0,
+            guides = design_guides(sequence, enzyme, region=region_0, limit=200,
                                    max_offtarget_mismatches=max_mm, offtarget_top_n=top_n)
         st.session_state["guides"] = guides
-        st.session_state["guides_key"] = (locus["id"] if locus else "custom", effector_id, region)
+        st.session_state["guides_key"] = fingerprint
 
     guides = st.session_state.get("guides") or []
     if not guides:
@@ -106,10 +121,13 @@ def render() -> None:
         return
 
     st.markdown("## 3 · Ranked guides")
-    st.plotly_chart(viz.fig_guide_scatter(guides), width="stretch")
-    st.dataframe(_guide_frame(guides), width="stretch", hide_index=True, height=320)
-    st.download_button("⬇️ Download the guide table (CSV)",
-                       _guide_frame(guides).to_csv(index=False), "guides.csv")
+    chart(viz.fig_guide_scatter(guides), width="stretch")
+    table(_guide_frame(guides), width="stretch", hide_index=True, height=320)
+    from ..io import export_center
+    export_center({"sequence": sequence, "enzyme": effector_id, "region": region,
+                   "mismatch_budget": max_mm, "deep_scoring_limit": top_n},
+                  _guide_frame(guides).to_dict("records"),
+                  locus if locus else {"source": "user FASTA/raw DNA"}, "ranked_guides")
 
     st.markdown("## 4 · Guide detail")
     g1, g2 = st.columns([1.5, 1])
@@ -142,7 +160,7 @@ def render() -> None:
                                f"<span class='mono' style='word-break:break-all'>{rna['rna']}</span>",
                                "violet"), unsafe_allow_html=True)
         comp = g["components"]
-        st.plotly_chart(viz.fig_bar(list(comp.keys()), [100 * v for v in comp.values()],
+        chart(viz.fig_bar(list(comp.keys()), [100 * v for v in comp.values()],
                                     "Score components (%)", theme.C["teal"], 300,
                                     horizontal=True), width="stretch")
         st.markdown(theme.callout(
@@ -160,7 +178,7 @@ def render() -> None:
                                   "against the whole genome (and against the intended target "
                                   "for a therapeutic guide).", "good"), unsafe_allow_html=True)
     else:
-        st.dataframe(pd.DataFrame([{
+        table(pd.DataFrame([{
             "mismatches": o["mismatches"],
             "seed mismatches": o["seed_mismatches"],
             "strand": o["strand"],
@@ -171,8 +189,8 @@ def render() -> None:
             "engages?": "yes" if o["pam_valid"] else "no PAM",
         } for o in ots]), width="stretch", hide_index=True)
         st.caption("`.` = match, `|` = mismatch. A hit with zero seed mismatches and a valid PAM "
-                   "is the kind of site that shows up as a real off-target cut in a GUIDE-seq "
-                   "experiment.")
+                   "deserves further investigation; sequence similarity does not establish cleavage. "
+                   "This legacy ranking excludes exact matches; the custom SpCas9 scan includes them.")
 
     # ------------------------------------------------------------ donor -----
     st.markdown("## 6 · Donor design (if you need precise repair)")
@@ -237,7 +255,7 @@ def render() -> None:
             st.markdown(theme.callout(peg["note"], "info"), unsafe_allow_html=True)
             tm_table = pd.DataFrame([{"PBS length": L, "Tm (°C)": round(tm, 1), "PBS": p}
                                      for L, tm, p in recommend_pbs(peg["rtt"], 45.0)])
-            st.dataframe(tm_table, width="stretch", hide_index=True)
+            table(tm_table, width="stretch", hide_index=True)
         except ValueError as exc:
             st.warning(f"Could not place the guide in this sequence: {exc}")
 
@@ -249,6 +267,6 @@ def render() -> None:
         cov = pam_coverage(sequence, pam, window=50)
         cov["pam"] = name
         rows.append(cov)
-    st.plotly_chart(viz.fig_pam_coverage(rows), width="stretch")
+    chart(viz.fig_pam_coverage(rows), width="stretch")
     st.caption("Same sequence, different PAM requirements. This is the quantitative version of "
                "«there is no NGG near my cut site».")

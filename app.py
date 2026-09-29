@@ -4,7 +4,7 @@ Run with::
 
     streamlit run app.py --server.address 0.0.0.0 --server.port 8501
 
-Five workbenches (mission control, immunity arena, Cas explorer, guide design,
+Eight workbenches (mission control, immunity arena, Cas explorer, guide design,
 genome surgery, repair lab, therapeutics, database) share one simulation core in
 ``beastlab``.
 """
@@ -20,7 +20,7 @@ st.set_page_config(
     page_title="BEAST Simulation Laboratory",
     page_icon="🧬",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",
 )
 
 st.markdown(theme.CSS, unsafe_allow_html=True)
@@ -58,7 +58,20 @@ with st.sidebar:
         "(NCBI / Ensembl); every model states its assumptions on screen."
     )
 
+st.sidebar.toggle("Lite mode · low-memory phone", key="lite_mode", value=False)
+st.sidebar.caption("Static cut frames, no supplementary Plotly charts, max 50 displayed rows. Setting persists in this session.")
+def clear_session():
+    lite = st.session_state.get("lite_mode", False)
+    st.session_state.clear()
+    st.session_state["lite_mode"] = lite
+
+
+st.sidebar.button("Clear session inputs & results", on_click=clear_session)
+from beastlab.field_notes import render as field_notes
+field_notes(nav.title)
+st.caption("Assumptions: educational, sequence-only or toy models; bench-specific details below. What this does not claim: experimental validation, clinical safety, efficacy or proof of cure.")
 nav.run()
+st.caption("Zero Data Retention — computed in RAM. User inputs stay in the live session until cleared or expired; no app-level disk storage. Public references alone are cached. Hosting/network logs are outside this app’s control.")
 
 from pathlib import Path  # noqa: E402
 
